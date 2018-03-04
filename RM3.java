@@ -44,7 +44,7 @@ public class RM3 {
 		lambda = lambda_; 
 		
 		/***  Variables ***/
-	    int doc_index = 0; //index (in Lucene library)
+		int doc_index = 0; //index (in Lucene library)
 	    String DocId = ""; //field
 	    DocStats doc_stat;
 	    // Sum of P_t over all topK documents, its size is as large as distinct terms in topK docs
@@ -119,7 +119,6 @@ public class RM3 {
 		for (TermWeight tw : term_weights) {
 			if (term_num > retreiveTerm_num)
 				break;
-			//System.out.println(term_num+". "+tw.weight+", "+tw.term);
 			top_boosting_factors.put((String) tw.term, (double) tw.weight);
 			term_num ++;
 		}
@@ -145,10 +144,8 @@ public class RM3 {
     	    			Integer tf = current_docStat.term_freq.get(new_P_q_term);
     	    			tf = tf == null ? 0 : tf;
     	        		new_P_q_val = (tf + 1D) / (current_docStat.docLen + vocab_size); //new P_q_i
-    	        		//System.out.println("boost:"+boosting_val+"log:"+Math.log(1 + new_P_q_val));
     	        		doc_weight += (boosting_val * Math.log(1 + new_P_q_val));
     	        }  
-    	        //System.out.println(doc_weight);
     	        current_docStat.set_score(doc_weight);
     	        final_docStats.add(current_docStat);
         }
