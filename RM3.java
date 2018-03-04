@@ -59,7 +59,6 @@ public class RM3 {
 		
 		/***  Initial search ***/
 		LMSimilarity current_sim = new LMDirichletSimilarity(mu);
-		//BM25Similarity current_sim = new BM25Similarity(6F, 0.9F);
 	    searcher.setSimilarity(current_sim); 
 	    TopDocs results = searcher.search(query, retreivedDoc_num); /////Search here 1
 	    ScoreDoc[] hits = results.scoreDocs; //top docs indexes(ids) found by initial search

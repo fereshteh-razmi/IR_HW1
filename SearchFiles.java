@@ -115,7 +115,6 @@ public class SearchFiles {
 			    	}
 				break;
 			case "LMLaplace":
-				//LMSimilarity sim_ = new LMDirichletSimilarity(0.7F);////???????????????????
 				LaplanceLM sim_ = new LaplanceLM(vocabulary_size);
 			    searcher.setSimilarity(sim_);
 				TopDocs results_ = searcher.search(query, numofMaxRetreivedDocs); /////Search here 1
