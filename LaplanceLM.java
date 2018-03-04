@@ -22,7 +22,7 @@ public class LaplanceLM extends LMSimilarity {
 	protected float score(BasicStats stats, float freq, float docLen) {
 		// TODO Auto-generated method stub
 	    return (float) (stats.getBoost() *
-	            Math.log((freq + 1F) / (docLen + vocab_size)));
+	            Math.log(1 + ((freq + 1F) / (docLen + vocab_size))));
  
 	    //((LMStats)stats).getCollectionProbability()   
 	}

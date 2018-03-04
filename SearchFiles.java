@@ -18,11 +18,14 @@
 
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -42,6 +45,7 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.similarities.BM25Similarity;
+import org.apache.lucene.search.similarities.LMDirichletSimilarity;
 import org.apache.lucene.search.similarities.LMJelinekMercerSimilarity;
 import org.apache.lucene.search.similarities.LMSimilarity;
 import org.apache.lucene.search.similarities.Similarity;
@@ -66,238 +70,106 @@ public class SearchFiles {
   
   /** Simple command-line based search demo. */
   public static void main(String[] args) throws Exception {
-    String usage =
-      "Usage:\tjava org.apache.lucene.demo.SearchFiles [-index dir] [-field f] [-repeat n] [-queries file] [-query string] [-raw] [-paging hitsPerPage]\n\nSee http://lucene.apache.org/core/4_1_0/demo/ for details.";
-    if (args.length > 0 && ("-h".equals(args[0]) || "-help".equals(args[0]))) {
-      System.out.println(usage);
-      System.exit(0);
-    }
-
-    String index = "index";
+	  
+    String index_path = "index";
+    String query_path = "query.txt";
+    String output_path = "output.txt";
+    String my_login_id = "frazmim";
+    int numofMaxRetreivedDocs = 100;
+    String search_type = "BM25";
     String field = "Text";    /////// it's Text not text
-    String queries = null;
-    int repeat = 0;
-    boolean raw = false;
-    String queryString = null;
-    int hitsPerPage = 10;
     
-    for(int i = 0;i < args.length;i++) {
-      if ("-index".equals(args[i])) {
-        index = args[i+1];
-        i++;
-      } else if ("-field".equals(args[i])) {
-        field = args[i+1];
-        i++;
-      } else if ("-queries".equals(args[i])) {
-        queries = args[i+1];
-        i++;
-      } else if ("-query".equals(args[i])) {
-        queryString = args[i+1];
-        i++;
-      } else if ("-repeat".equals(args[i])) {
-        repeat = Integer.parseInt(args[i+1]);
-        i++;
-      } else if ("-raw".equals(args[i])) {
-        raw = true;
-      } else if ("-paging".equals(args[i])) {
-        hitsPerPage = Integer.parseInt(args[i+1]);
-        if (hitsPerPage <= 0) {
-          System.err.println("There must be at least 1 hit per page.");
-          System.exit(1);
-        }
-        i++;
-      }
-    }
+    //  if ("-index".equals(args[i])) {
+    //    index = args[i+1];
     
-    IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(index)));
+    IndexReader reader = DirectoryReader.open(FSDirectory.open(Paths.get(index_path)));
     IndexSearcher searcher = new IndexSearcher(reader);
     Analyzer analyzer = new StandardAnalyzer();
-
-    vocabulary_size = vocabSize(reader); /// calculate vocab size
-    
-    BufferedReader in = null;
-    if (queries != null) {
-      in = Files.newBufferedReader(Paths.get(queries), StandardCharsets.UTF_8);
-    } else {
-      in = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
-    }
     QueryParser parser = new QueryParser(field, analyzer);
     
-    while (true) {
-      if (queries == null && queryString == null) {                        // prompt the user
-        System.out.println("Enter query: ");
-      }
-
-      String line = queryString != null ? queryString : in.readLine();
-
-      if (line == null || line.length() == -1) {
-        break;
-      }
-
-      line = line.trim();
-      if (line.length() == 0) {
-        break;
-      }
-
-      Query query = parser.parse(line);////
-      System.out.println("Searching for: " + query.toString(field));
+    vocabulary_size = vocabSize(reader); /// calculate vocabulary size
+    
+    File file = new File(query_path);
+	FileReader fileReader = new FileReader(file);
+	BufferedReader bufferedReader = new BufferedReader(fileReader);
+	String line;
+	while ((line = bufferedReader.readLine()) != null) {
+		line = line.trim();
+		if (line.length() == 0) 
+			break;
+		Query query = parser.parse(line);
+		System.out.println("Searching for: " + query.toString(field));
+		switch (search_type) {
+			case "BM25":
+				float k1 = 1.2F;
+				float b = 0.75F;
+				BM25Similarity sim = new BM25Similarity(k1, b);
+				searcher.setSimilarity(sim);
+				TopDocs results = searcher.search(query, numofMaxRetreivedDocs); /////Search here 1
+				ScoreDoc[] hits = results.scoreDocs;
+			    	for (int i = 0; i < hits.length; i++) {
+			    		Document doc = searcher.doc(hits[i].doc);
+			    		String DocId = doc.get("DocId"); 
+			        System.out.println((i+1) + ". " + DocId + ", " + hits[i].score);
+			        System.out.println(doc.get("Title"));
+			    	}
+				break;
+			case "LMLaplace":
+				//LMSimilarity sim_ = new LMDirichletSimilarity(0.7F);////???????????????????
+				LaplanceLM sim_ = new LaplanceLM(vocabulary_size);
+			    searcher.setSimilarity(sim_);
+				TopDocs results_ = searcher.search(query, numofMaxRetreivedDocs); /////Search here 1
+				ScoreDoc[] hits_ = results_.scoreDocs;
+			    	for (int i = 0; i < hits_.length; i++) {
+			    		Document doc = searcher.doc(hits_[i].doc);
+			    		String DocId = doc.get("DocId"); 
+			        System.out.println((i+1) + ". " + DocId + ", " + hits_[i].score);
+			        System.out.println(doc.get("Title"));
+			    	}
+				break;
+			case "RM1":
+				float mu1 = 0.2F; ///????DrichletLM interpolation
+				RM1 rm1_searcher = new RM1(searcher, reader, 50, numofMaxRetreivedDocs, 20);//topDoc,rankedDoc,#newQueryTerms
+				ArrayList<DocStats> ranked_docs = rm1_searcher.search(mu1, query);
+				int rank = 1;
+				for (DocStats rd : ranked_docs) {
+					System.out.println(rank + ". " + rd.DocId + ", " + rd.score);
+					System.out.println(searcher.doc(rd.doc_index).get("Title"));
+					rank ++;	
+				}
+				break;
+			case "RM3":
+				float mu_ = 0.2F; //DrichletLM interpolation
+				float lambda = 0.9F; //RM3 interpolation, product of P_RM1
+				RM3 rm3_searcher = new RM3(searcher, reader, 50, numofMaxRetreivedDocs, 20);//topDoc,rankedDoc,#newQueryTerms
+				ArrayList<DocStats> ranked_docs_ = rm3_searcher.search(lambda, mu_, query);
+				int rank_ = 1;
+				for (DocStats rd : ranked_docs_) {
+					System.out.println(rank_ + ". " + rd.DocId + ", " + rd.score);
+					System.out.println(searcher.doc(rd.doc_index).get("Title"));
+					rank_ ++;	
+				}
+				break;
+			default:
+				throw new IllegalArgumentException("Invalid search type " + search_type);		
+		}
+			
 		
-      if (repeat > 0) {                           // repeat & time as benchmark
-        Date start = new Date();
-        for (int i = 0; i < repeat; i++) {
-          searcher.search(query, 100);////
-        }
-        Date end = new Date();
-        System.out.println("Time: "+(end.getTime()-start.getTime())+"ms");
-      }
-      System.out.println(line);
-      System.out.println(query);
-      doPagingSearch(in, searcher, query, hitsPerPage, raw, queries == null && queryString == null,reader);
+	}
+	fileReader.close();
 
-      if (queryString != null) {
-        break;
-      }
-    }
-    reader.close();
-  }
-
-  /**
-   * This demonstrates a typical paging search scenario, where the search engine presents 
-   * pages of size n to the user. The user can then go to the next page if interested in
-   * the next hits.
-   * 
-   * When the query is executed for the first time, then only enough results are collected
-   * to fill 5 result pages. If the user wants to page beyond this limit, then the query
-   * is executed another time and all hits are collected.
- * @throws Exception 
-   * 
-   */
-  public static void doPagingSearch(BufferedReader in, IndexSearcher searcher, Query query, 
-                                     int hitsPerPage, boolean raw, boolean interactive, IndexReader indexReader) throws Exception {
- 
-	  
-    //searcher.setSimilarity(new BM25Similarity(6, (float) 0.9));//(float k1, float b)
-	//LMJelinekMercerSimilarity current_sim = new LMJelinekMercerSimilarity((float) 0.9);
-	
-	LaplanceLM current_sim = new LaplanceLM(vocabulary_size);
-    searcher.setSimilarity(current_sim);  
-    //System.out.println(current_sim.getName());
-    
-    // Collect enough docs to show 5 pages
-    TopDocs results = searcher.search(query, 5 * hitsPerPage); /////Search here 1
-    ScoreDoc[] hits = results.scoreDocs;
-    System.out.println(current_sim.getName());
-    
-    int numTotalHits = Math.toIntExact(results.totalHits);
-    System.out.println(numTotalHits + " total matching documents");
-
-    int start = 0;
-    int end = Math.min(numTotalHits, hitsPerPage);
-    
-    while (true) {
-      if (end > hits.length) {
-        System.out.println("Only results 1 - " + hits.length +" of " + numTotalHits + " total matching documents collected.");
-        System.out.println("Collect more (y/n) ?");
-        String line = in.readLine();
-        if (line.length() == 0 || line.charAt(0) == 'n') {
-          break;
-        }
-        hits = searcher.search(query, numTotalHits).scoreDocs; /////Search here 2
-        
-      }
-      
-      end = Math.min(hits.length, start + hitsPerPage);
-      
-      for (int i = start; i < end; i++) {
-        if (raw) {                              // output raw format
-          System.out.println("doc="+hits[i].doc+" score="+hits[i].score);
-          continue;
-        }
-
-        Document doc = searcher.doc(hits[i].doc);
-        /*String[] doc_terms = doc.getValues("Text");
-		for (int j = 0; j < doc_terms.length; j++) {
-			System.out.println(doc_terms[j]);
-		}*/
-        RM1 rm = new RM1();
-       // rm.RM1search(searcher, indexReader, query);
-		
-        
-        String doc_id = doc.get("DocId"); ///// print id instead of path
-        if (doc_id != null) {
-            System.out.println((i+1) + ". " + doc_id + ", " + hits[i].score);
-          } else {
-            System.out.println((i+1) + ". " + "No id for this document");
-          }
-        /*String path = doc.get("path");
-        if (path != null) {
-          System.out.println((i+1) + ". " + path);
-          String title = doc.get("title");
-          if (title != null) {
-            System.out.println("   Title: " + doc.get("title"));
-          }
-        } else {
-          System.out.println((i+1) + ". " + "No path for this document");
-        }*/
-                  
-      }
-
-      if (!interactive || end == 0) {
-        break;
-      }
-
-      if (numTotalHits >= end) {
-        boolean quit = false;
-        while (true) {
-          System.out.print("Press ");
-          if (start - hitsPerPage >= 0) {
-            System.out.print("(p)revious page, ");  
-          }
-          if (start + hitsPerPage < numTotalHits) {
-            System.out.print("(n)ext page, ");
-          }
-          System.out.println("(q)uit or enter number to jump to a page.");
-          
-          String line = in.readLine();
-          if (line.length() == 0 || line.charAt(0)=='q') {
-            quit = true;
-            break;
-          }
-          if (line.charAt(0) == 'p') {
-            start = Math.max(0, start - hitsPerPage);
-            break;
-          } else if (line.charAt(0) == 'n') {
-            if (start + hitsPerPage < numTotalHits) {
-              start+=hitsPerPage;
-            }
-            break;
-          } else {
-            int page = Integer.parseInt(line);
-            if ((page - 1) * hitsPerPage < numTotalHits) {
-              start = (page - 1) * hitsPerPage;
-              break;
-            } else {
-              System.out.println("No such page");
-            }
-          }
-        }
-        if (quit) break;
-        end = Math.min(numTotalHits, start + hitsPerPage);
-      }
-    }    
-  }
-  
+  } 
   
   
   // To calculate Vocabulary Size
 	public static int vocabSize(IndexReader reader) throws IOException {
 		Fields fds = MultiFields.getFields(reader);
-		Terms tms = fds.terms("Text"); /////// it's Text not text
+		Terms tms = fds.terms("Text"); 
 		TermsEnum itr = tms.iterator();
 		BytesRef byteRef = null;
 		HashSet<String> set = new HashSet<>();
 		while((byteRef = itr.next()) != null) {
-		set.add(byteRef.utf8ToString());
+			set.add(byteRef.utf8ToString());
 		}
 		int vocabSize = set.size();
 		return vocabSize;

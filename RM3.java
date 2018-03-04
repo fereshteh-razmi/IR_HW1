@@ -11,23 +11,25 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.similarities.BM25Similarity;
 import org.apache.lucene.search.similarities.LMDirichletSimilarity;
 import org.apache.lucene.search.similarities.LMSimilarity;
 
 
-public class RM1 {
+public class RM3 {
 	
 	public IndexSearcher searcher;
 	public IndexReader indexReader;
 	
-	/***  RM1 parameters ***/
+	/***  RM3 parameters ***/
 	public int topDoc_K; //How many files to be used for query expansion
 	public int retreivedDoc_num; //How many files to be ranked
 	public int retreiveTerm_num; //How many term from topK docs to be included in expanded query
 	//Default values. Can be changed in 
-	public float mu; //for Drichlet LM 
+	public float mu; //for Drichlet LM
+	public float lambda; // ((1-lambda) * P_MLE) + (lambda * P_RM1)
 	
-	public RM1(IndexSearcher searcher, IndexReader indexReader, int topDoc_K, int retreivedDoc_num, int retreiveTerm_num) {
+	public RM3(IndexSearcher searcher, IndexReader indexReader, int topDoc_K, int retreivedDoc_num, int retreiveTerm_num) {
 		this.searcher = searcher;
 		this.indexReader = indexReader;
 		this.topDoc_K = topDoc_K;
@@ -35,10 +37,11 @@ public class RM1 {
 		this.retreiveTerm_num = retreiveTerm_num;
 	}
 
-	public ArrayList<DocStats> search(float mu_, Query query) throws Exception { //term,rel_docs,query
+	public ArrayList<DocStats> search(float lambda_, float mu_, Query query) throws Exception { //term,rel_docs,query
 		
-		/***  RM1 parameters ***/
+		/***  RM3 parameters ***/
 		mu = mu_; 
+		lambda = lambda_; 
 		
 		/***  Variables ***/
 	    int doc_index = 0; //index (in Lucene library)
@@ -51,9 +54,12 @@ public class RM1 {
 		HashMap<String, Double> top_boosting_factors = new HashMap<>(); 
 		//find vocabulary size (number of words in the whole collection) in Text field
 		int vocab_size = SearchFiles.vocabSize(indexReader);
+	    String[] query_text = query.toString("Text").split(" "); //terms in the original query 
+		int query_size = query_text.length; //number of terms in the original query
 		
 		/***  Initial search ***/
 		LMSimilarity current_sim = new LMDirichletSimilarity(mu);
+		//BM25Similarity current_sim = new BM25Similarity(6F, 0.9F);
 	    searcher.setSimilarity(current_sim); 
 	    TopDocs results = searcher.search(query, retreivedDoc_num); /////Search here 1
 	    ScoreDoc[] hits = results.scoreDocs; //top docs indexes(ids) found by initial search
@@ -63,8 +69,6 @@ public class RM1 {
 	    		Document doc = searcher.doc(doc_index);
 	    		DocId = doc.get("DocId");
 	    		doc_stat = new DocStats(doc_index, indexReader, DocId);
-	    		String[] query_text = query.toString("Text").split(" ");
-	    		int query_size = query_text.length;
 	    		P_q = 1;
 	    		for (int j = 0; j < query_size; j++) {
 	    			Integer tf = doc_stat.term_freq.get(query_text[j]);
@@ -84,6 +88,25 @@ public class RM1 {
 	    		    }
 	    		}
 	    }
+	    
+	    
+	    /*** ***************** ***/
+	    /*** RM3 interpolation ***/
+	    /*** ***************** ***/
+	    HashMap<String, Integer> query_word_freq = new HashMap<String, Integer>();
+	  //since it's possible to have repetitive words in the query, we find distinct word's frequency
+	    for(String qw : query_text) { 
+	    		Integer freq = query_word_freq.get(qw);
+	    		query_word_freq.put(qw, freq==null ? 1 : freq+1);
+	    }
+		for (HashMap.Entry<String, Double> bf : all_boosting_factors.entrySet()) {
+			String term = bf.getKey();
+			Double P_RM1 = bf.getValue();
+			Integer query_term_freq = query_word_freq.get(term);
+			query_term_freq = query_term_freq == null ? 0 : query_term_freq; // if term exist in the query?
+			Double P_MLE = (double) query_term_freq / query_size;//query_size is size of the ArrayList, that is all query words 
+			all_boosting_factors.put(term, ((1-lambda) * P_MLE) + (lambda * P_RM1));
+		}
 	    
 
 	    /***  top boosting_factors --- retreiveTerm_num selected top terms + their: Sum of P_t over all documents ***/	    
@@ -132,7 +155,6 @@ public class RM1 {
         Collections.sort(final_docStats);
         
         return final_docStats;
-
 		
 	}
 }
